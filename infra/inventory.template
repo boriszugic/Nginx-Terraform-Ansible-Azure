@@ -1,0 +1,3 @@
+[nginx]
+${ip} ansible_user=${hostname}
+
