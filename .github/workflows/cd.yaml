@@ -34,6 +34,7 @@ jobs:
         run: |
           echo "${{ secrets.BACKEND_SSH_KEY }}" > key.pem
           chmod 600 key.pem
+          ssh-keygen -l -f key.pem
 
       - name: Download artifact
         uses: actions/download-artifact@v4
