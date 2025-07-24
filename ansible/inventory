@@ -1,3 +1,5 @@
 [nginx]
-172.211.85.158 ansible_user=3thingsdevops
+4.180.153.48 ansible_user=3thingsdevops
 
+[backend]
+98.71.204.36 ansible_user=3thingsdevops
