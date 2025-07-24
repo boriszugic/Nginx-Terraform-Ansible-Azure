@@ -1,0 +1,60 @@
+name: CD - Deploy Flask Backend
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create artifact
+        run: |
+          mkdir dist
+          cp backend/*.py backend/requirements.txt backend/app.service dist/
+          tar -czf flask-backend.tar.gz -C dist .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flask-backend
+          path: flask-backend.tar.gz
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH key
+        run: |
+          echo "${{ secrets.BACKEND_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flask-backend
+
+      - name: Copy artifact to backend VM
+        run: |
+          scp -i key.pem -o StrictHostKeyChecking=no flask-backend.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.BACKEND_PUBLIC_IP }}:/tmp/
+
+      - name: Deploy and restart app
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.BACKEND_PUBLIC_IP }} << 'EOF'
+            set -e
+            sudo mkdir -p /opt/flask-backend
+            sudo tar -xzf /tmp/flask-backend.tar.gz -C /opt/flask-backend --strip-components=0
+            cd /opt/flask-backend
+            pip3 install -r requirements.txt
+            sudo cp app.service /etc/systemd/system/flask-app.service
+            sudo systemctl daemon-reexec
+            sudo systemctl daemon-reload
+            sudo systemctl restart flask-app
+          EOF
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=Flask Backend App
+After=network.target
+
+[Service]
+User=3thingsdevops
+WorkingDirectory=/opt/flask-backend
+ExecStart=/usr/bin/python3 /opt/flask-backend/app.py
+Restart=always
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
