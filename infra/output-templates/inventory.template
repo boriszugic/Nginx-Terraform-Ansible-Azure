@@ -1,0 +1,5 @@
+[nginx]
+${nginx_ip} ansible_user=${nginx_hostname}
+
+[backend]
+${backend_ip} ansible_user=${backend_hostname}

@@ -51,14 +51,27 @@ resource "azurerm_network_security_rule" "allow_ssh" {
   network_security_group_name = azurerm_network_security_group.main.name
 }
 
-
 resource "azurerm_subnet_network_security_group_association" "main" {
   subnet_id                 = azurerm_subnet.main.id
   network_security_group_id = azurerm_network_security_group.main.id
 }
 
-resource "azurerm_network_interface" "main" {
-  name                = "${var.project_name}-nic"
+resource "azurerm_public_ip" "nginx" {
+  name                = "${var.project_name}-nginx-pip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+}
+
+resource "azurerm_public_ip" "backend" {
+  name                = "${var.project_name}-backend-pip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+}
+
+resource "azurerm_network_interface" "nginx" {
+  name                = "${var.project_name}-nginx-nic"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
 
@@ -66,23 +79,29 @@ resource "azurerm_network_interface" "main" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.main.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.main.id
+    public_ip_address_id          = azurerm_public_ip.nginx.id
   }
 }
 
-resource "azurerm_public_ip" "main" {
-  name                = "${var.project_name}-pip"
+resource "azurerm_network_interface" "backend" {
+  name                = "${var.project_name}-backend-nic"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
-  allocation_method   = "Static"
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.main.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.backend.id
+  }
 }
 
-resource "azurerm_linux_virtual_machine" "main" {
-  name                = "${var.project_name}-vm"
+resource "azurerm_linux_virtual_machine" "nginx" {
+  name                = "${var.project_name}-nginx-vm"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
   network_interface_ids = [
-    azurerm_network_interface.main.id
+    azurerm_network_interface.nginx.id
   ]
   size                = var.vm_size
   admin_username      = var.admin_username
@@ -96,7 +115,7 @@ resource "azurerm_linux_virtual_machine" "main" {
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
-    name                 = "${var.project_name}-osdisk"
+    name                 = "${var.project_name}-nginx-osdisk"
   }
 
   source_image_reference {
@@ -105,5 +124,42 @@ resource "azurerm_linux_virtual_machine" "main" {
     sku       = "22_04-lts"
     version   = "latest"
   }
+
+  tags = {
+    role = "reverse_proxy"
+  }
 }
 
+resource "azurerm_linux_virtual_machine" "backend" {
+  name                = "${var.project_name}-backend-vm"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  network_interface_ids = [
+    azurerm_network_interface.backend.id
+  ]
+  size                = var.vm_size
+  admin_username      = var.admin_username
+  disable_password_authentication = true
+
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = file("~/.ssh/id_rsa_backend.pub")
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+    name                 = "${var.project_name}-backend-osdisk"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+
+  tags = {
+    role = "backend"
+  }
+}
