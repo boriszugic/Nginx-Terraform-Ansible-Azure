@@ -1,5 +1,5 @@
 # 🚀 Nginx Flask App Deployment to Azure with Terraform, Ansible & GitHub Actions
-This project automates the provisioning of two Azure Virtual Machines using Terraform, configures them using Ansible, and deploys a Flask backend application via GitHub Actions. The setup includes an Nginx reverse proxy VM and a separate backend Flask app VM.
+This project automates the provisioning of two Azure Virtual Machines using Terraform, configures them using Ansible, and deploys a Flask backend application via GitHub Actions. The setup includes an Nginx reverse proxy VM and a separate backend Flask app VM. The TLS certificate is issued by Let's Encrypt via Certbot.
 
 ---
 
@@ -8,7 +8,8 @@ This project automates the provisioning of two Azure Virtual Machines using Terr
 - Terraform
 - Ansible
 - Logged into Azure from console
-- SSH key pair
+- 2 SSH key pairs (~/.ssh/id_rsa and ~/.ssh/id_rsa_backend for Nginx VM and Flask VM respectively)
+- Custom domain (for HTTPS, optional)
 
 ---
 
@@ -25,24 +26,25 @@ terraform apply
 ```
 This will:
 - Create a resource group
-- Create a Vnet, subnet inside the created Vnet, NIC, and NSG with allow http and ssh rules on the subnet
+- Create a Vnet, subnet inside the created Vnet, NICs, and 2 NSGs with allow http/s rules on Nginx NSG, and allow ssh rule on both
 - Deploy 2 VMs (one for Nginx, one for Flask backend) and corresponding public IPs
-- Write the VMs' IPs and hostnames to Ansible's inventory file
+- Write the VMs' public IPs and hostnames to Ansible's inventory file, and backend VM's private ip to ```vars/backend-ip.yaml```
 
-### 3. Configure the server with Ansible
+### 3. Configure the servers with Ansible
 
 ```bash
 cd ../ansible
+ansible-playbook -i inventory -private-key ~/.ssh/id_rsa_backend install_python_flask.yaml --ssh-extra-args='-o StrictHostKeyChecking=no'
 ansible-playbook -i inventory configure-nginx-reverse-proxy.yaml --ssh-extra-args='-o StrictHostKeyChecking=no'
-ansible-playbook -i inventory install_python_flask.yaml --ssh-extra-args='-o StrictHostKeyChecking=no'
+ansible-playbook -i inventory install_certbot_and_configure_tls.yaml --extra-vars "domain={your_domain} email={your_email}" --ssh-extra-args='-o StrictHostKeyChecking=no'
 ```
 This will:
-- Install Nginx on the first VM and configure it as a reverse proxy
+- Install Nginx on the first VM and configure it as a reverse proxy with TLS termination
 - Install Python and Flask on the second VM
 
 ### 4. Deploy via GitHub Actions
 
-On each push to main, GitHub Actions will:
+On each push to main or manual dispatch, GitHub Actions will:
 
 - Create a code artifact
 - Upload the artifact to GitHub
@@ -52,4 +54,4 @@ On each push to main, GitHub Actions will:
 ---
 
 ## 🙌 Credits
-Part of the **3 Things DevOps** (https://www.linkedin.com/newsletters/7315967826320588801/) series 🛠️
+Part of the <a href="https://www.linkedin.com/build-relation/newsletter-follow?entityUrn=7315967826320588801" target="_blank">DevOps Starter Pack</a> series 🛠️
