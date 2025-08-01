@@ -17,14 +17,20 @@ resource "azurerm_subnet" "main" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-resource "azurerm_network_security_group" "main" {
-  name                = "${var.project_name}-nsg"
+resource "azurerm_network_security_group" "nginx" {
+  name                = "${var.project_name}-nginx-nsg"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
 }
 
-resource "azurerm_network_security_rule" "allow_http" {
-  name                        = "allow-http"
+resource "azurerm_network_security_group" "backend" {
+  name                = "${var.project_name}-backend-nsg"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+
+resource "azurerm_network_security_rule" "nginx_http" {
+  name                        = "nginx-allow-http"
   priority                    = 1001
   direction                   = "Inbound"
   access                      = "Allow"
@@ -34,11 +40,25 @@ resource "azurerm_network_security_rule" "allow_http" {
   source_address_prefix       = "*"
   destination_address_prefix  = "*"
   resource_group_name         = azurerm_resource_group.main.name
-  network_security_group_name = azurerm_network_security_group.main.name
+  network_security_group_name = azurerm_network_security_group.nginx.name
 }
 
-resource "azurerm_network_security_rule" "allow_ssh" {
-  name                        = "allow-ssh"
+resource "azurerm_network_security_rule" "nginx_https" {
+  name                        = "nginx-allow-https"
+  priority                    = 1002
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.main.name
+  network_security_group_name = azurerm_network_security_group.nginx.name
+}
+
+resource "azurerm_network_security_rule" "nginx_ssh" {
+  name                        = "nginx-allow-ssh"
   priority                    = 1000
   direction                   = "Inbound"
   access                      = "Allow"
@@ -48,12 +68,32 @@ resource "azurerm_network_security_rule" "allow_ssh" {
   source_address_prefix       = "*"
   destination_address_prefix  = "*"
   resource_group_name         = azurerm_resource_group.main.name
-  network_security_group_name = azurerm_network_security_group.main.name
+  network_security_group_name = azurerm_network_security_group.nginx.name
 }
 
-resource "azurerm_subnet_network_security_group_association" "main" {
-  subnet_id                 = azurerm_subnet.main.id
-  network_security_group_id = azurerm_network_security_group.main.id
+resource "azurerm_network_security_rule" "backend_ssh" {
+  name                        = "backend-allow-ssh"
+  priority                    = 1000
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "22"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.main.name
+  network_security_group_name = azurerm_network_security_group.backend.name
+}
+
+
+resource "azurerm_network_interface_security_group_association" "nginx" {
+  network_interface_id      = azurerm_network_interface.nginx.id
+  network_security_group_id = azurerm_network_security_group.nginx.id
+}
+
+resource "azurerm_network_interface_security_group_association" "backend" {
+  network_interface_id      = azurerm_network_interface.backend.id
+  network_security_group_id = azurerm_network_security_group.backend.id
 }
 
 resource "azurerm_public_ip" "nginx" {

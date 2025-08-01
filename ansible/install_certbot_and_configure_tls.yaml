@@ -1,0 +1,33 @@
+- name: Install Certbot and configure HTTPS with Nginx
+  hosts: nginx
+  become: yes
+ 
+  tasks:
+   
+    - name: Install certbot and nginx plugin
+      apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        update_cache: yes
+        state: present
+
+    - name: Run Certbot and let it edit Nginx config
+      command: >
+        certbot --nginx
+        --non-interactive
+        --agree-tos
+        --email {{ email }}
+        -d {{ domain }} -d www.{{ domain }}
+      args:
+        creates: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+
+    - name: Set up cron job for renewal (with Nginx reload)
+      cron:
+        name: "Renew Let's Encrypt cert"
+        job: "certbot renew --quiet --deploy-hook 'systemctl reload nginx'"
+        minute: 0
+        hour: 3
+
+
+
