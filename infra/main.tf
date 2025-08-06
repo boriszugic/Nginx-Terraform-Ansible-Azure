@@ -21,70 +21,61 @@ resource "azurerm_network_security_group" "nginx" {
   name                = "${var.project_name}-nginx-nsg"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
+
+  security_rule {
+    name                       = "allow_ssh"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow_http"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow_https"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
-resource "azurerm_network_security_group" "backend" {
-  name                = "${var.project_name}-backend-nsg"
+resource "azurerm_network_security_group" "default" {
+  name                = "${var.project_name}-default-nsg"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
-}
 
-resource "azurerm_network_security_rule" "nginx_http" {
-  name                        = "nginx-allow-http"
-  priority                    = 1001
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "80"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.main.name
-  network_security_group_name = azurerm_network_security_group.nginx.name
+  security_rule {
+    name                       = "allow_ssh"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
-
-resource "azurerm_network_security_rule" "nginx_https" {
-  name                        = "nginx-allow-https"
-  priority                    = 1002
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "443"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.main.name
-  network_security_group_name = azurerm_network_security_group.nginx.name
-}
-
-resource "azurerm_network_security_rule" "nginx_ssh" {
-  name                        = "nginx-allow-ssh"
-  priority                    = 1000
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "22"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.main.name
-  network_security_group_name = azurerm_network_security_group.nginx.name
-}
-
-resource "azurerm_network_security_rule" "backend_ssh" {
-  name                        = "backend-allow-ssh"
-  priority                    = 1000
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "22"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.main.name
-  network_security_group_name = azurerm_network_security_group.backend.name
-}
-
 
 resource "azurerm_network_interface_security_group_association" "nginx" {
   network_interface_id      = azurerm_network_interface.nginx.id
@@ -93,7 +84,12 @@ resource "azurerm_network_interface_security_group_association" "nginx" {
 
 resource "azurerm_network_interface_security_group_association" "backend" {
   network_interface_id      = azurerm_network_interface.backend.id
-  network_security_group_id = azurerm_network_security_group.backend.id
+  network_security_group_id = azurerm_network_security_group.default.id
+}
+
+resource "azurerm_network_interface_security_group_association" "prom-grafana" {
+  network_interface_id      = azurerm_network_interface.prom-grafana.id
+  network_security_group_id = azurerm_network_security_group.default.id
 }
 
 resource "azurerm_public_ip" "nginx" {
@@ -105,6 +101,13 @@ resource "azurerm_public_ip" "nginx" {
 
 resource "azurerm_public_ip" "backend" {
   name                = "${var.project_name}-backend-pip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+}
+
+resource "azurerm_public_ip" "prom-grafana" {
+  name                = "${var.project_name}-prom-grafana-pip"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
@@ -136,6 +139,19 @@ resource "azurerm_network_interface" "backend" {
   }
 }
 
+resource "azurerm_network_interface" "prom-grafana" {
+  name                = "${var.project_name}-prom-grafana-nic"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.main.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.prom-grafana.id
+  }
+}
+
 resource "azurerm_linux_virtual_machine" "nginx" {
   name                = "${var.project_name}-nginx-vm"
   location            = var.location
@@ -146,10 +162,10 @@ resource "azurerm_linux_virtual_machine" "nginx" {
   size                = var.vm_size
   admin_username      = var.admin_username
   disable_password_authentication = true
-
+  
   admin_ssh_key {
     username   = var.admin_username
-    public_key = file("~/.ssh/id_rsa.pub")
+    public_key = file("../keys/id_rsa_nginx.pub")
   }
 
   os_disk {
@@ -183,7 +199,7 @@ resource "azurerm_linux_virtual_machine" "backend" {
 
   admin_ssh_key {
     username   = var.admin_username
-    public_key = file("~/.ssh/id_rsa_backend.pub")
+    public_key = file("../keys/id_rsa_backend.pub")
   }
 
   os_disk {
@@ -201,5 +217,39 @@ resource "azurerm_linux_virtual_machine" "backend" {
 
   tags = {
     role = "backend"
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "prom-grafana" {
+  name                = "${var.project_name}-prom-grafana-vm"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  network_interface_ids = [
+    azurerm_network_interface.prom-grafana.id
+  ]
+  size                = var.vm_size
+  admin_username      = var.admin_username
+  disable_password_authentication = true
+
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = file("../keys/id_rsa_prom-grafana.pub")
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+    name                 = "${var.project_name}-prom-grafana-osdisk"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+
+  tags = {
+    role = "monitoring"
   }
 }

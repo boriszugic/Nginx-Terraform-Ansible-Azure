@@ -1,5 +1,12 @@
 [nginx]
-4.180.153.48 ansible_user=3thingsdevops
+52.148.202.90 ansible_user=devopsstarterpack ansible_ssh_private_key_file=../../keys/id_rsa_nginx
 
 [backend]
-98.71.204.36 ansible_user=3thingsdevops
+20.93.136.16 ansible_user=devopsstarterpack ansible_ssh_private_key_file=../../keys/id_rsa_backend
+
+[app_stack:children]
+nginx
+backend
+
+[prom_grafana]
+4.180.175.59 ansible_user=devopsstarterpack ansible_ssh_private_key_file=../../keys/id_rsa_prom-grafana

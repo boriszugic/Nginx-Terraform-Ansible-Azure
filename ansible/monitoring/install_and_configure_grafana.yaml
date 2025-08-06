@@ -1,0 +1,41 @@
+- name: Install Grafana and configure Prometheus as data source
+  hosts: prom_grafana
+  become: yes
+  tasks:
+    - name: Add Grafana APT key
+      apt_key:
+        url: https://packages.grafana.com/gpg.key
+        state: present
+
+    - name: Add Grafana APT repository
+      apt_repository:
+        repo: "deb https://packages.grafana.com/oss/deb stable main"
+        state: present
+        filename: grafana
+
+    - name: Update APT cache
+      apt:
+        update_cache: yes
+
+    - name: Install Grafana
+      apt:
+        name: grafana
+        state: present
+
+    - name: Create Grafana provisioning directory
+      file:
+        path: /etc/grafana/provisioning/datasources
+        state: directory
+        mode: '0755'
+
+    - name: Copy Prometheus data source config
+      copy:
+        src: prometheus.yaml
+        dest: /etc/grafana/provisioning/datasources/prometheus.yaml
+        mode: '0644'
+
+    - name: Enable and start Grafana service
+      systemd:
+        name: grafana-server
+        enabled: yes
+        state: restarted

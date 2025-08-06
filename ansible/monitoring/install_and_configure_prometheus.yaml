@@ -1,0 +1,108 @@
+- name: Install Prometheus
+  hosts: prom_grafana
+  become: yes
+  vars_files:
+    - ../vars/backend-ip.yaml
+  vars:
+    prometheus_version: "2.52.0"
+    prometheus_user: "prometheus"
+    prometheus_config_dir: "/etc/prometheus"
+    prometheus_data_dir: "/var/lib/prometheus"
+  tasks:
+
+    - name: Create Prometheus user
+      user:
+        name: "{{ prometheus_user }}"
+        shell: /sbin/nologin
+
+    - name: Download Prometheus archive
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: /tmp/prometheus.tar.gz
+
+    - name: Extract Prometheus
+      unarchive:
+        src: /tmp/prometheus.tar.gz
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Install binaries
+      copy:
+        remote_src: yes
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: '0755'
+      loop:
+        - prometheus
+        - promtool
+
+    - name: Create directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_user }}"
+        mode: '0755'
+      loop:
+        - "{{ prometheus_config_dir }}"
+        - "{{ prometheus_data_dir }}"
+
+    - name: Copy console templates and libraries
+      copy:
+        remote_src: yes
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/{{ item }}"
+        dest: "{{ prometheus_config_dir }}/{{ item }}"
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_user }}"
+      loop:
+        - consoles
+        - console_libraries
+
+    - name: Write prometheus.yml config
+      copy:
+        dest: "{{ prometheus_config_dir }}/prometheus.yml"
+        content: |
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: 'node_exporter_vm'
+              static_configs:
+                - targets: ['{{ backend_ip }}:9100']
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_user }}"
+        mode: '0644'
+
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/prometheus.service
+        content: |
+          [Unit]
+          Description=Prometheus Monitoring
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User={{ prometheus_user }}
+          Group={{ prometheus_user }}
+          Type=simple
+          ExecStart=/usr/local/bin/prometheus \
+            --config.file={{ prometheus_config_dir }}/prometheus.yml \
+            --storage.tsdb.path={{ prometheus_data_dir }} \
+            --web.console.templates={{ prometheus_config_dir }}/consoles \
+            --web.console.libraries={{ prometheus_config_dir }}/console_libraries
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Enable and start Prometheus
+      systemd:
+        name: prometheus
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Reload systemd
+      command: systemctl daemon-reexec
+
